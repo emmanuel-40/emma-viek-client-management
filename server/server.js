@@ -223,6 +223,13 @@ app.get("/api/projects", authenticate, (req, res) => {
   });
 });
 
+// Unknown API routes -> JSON 404 (Express would otherwise return HTML).
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    message: "Route not found",
+  });
+});
+
 // Error handler
 // Converts thrown/parse errors into JSON. Internal messages are only exposed
 // outside production to avoid leaking implementation details.
