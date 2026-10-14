@@ -7,90 +7,166 @@ function App() {
   const [email, setEmail] = useState("admin@viek.test");
   const [password, setPassword] = useState("password123");
   const [clients, setClients] = useState([]);
-  const [projects, setProjects] = useState();
+  // FIX: initialise as an empty array so .map() is always safe to call
+  // (previously this was useState() -> undefined).
+  const [projects, setProjects] = useState([]);
   const [selectedClient, setSelectedClient] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+
+  function setStatus(text, error = false) {
+    setMessage(text);
+    setIsError(error);
+  }
+
+  function logout() {
+    localStorage.removeItem("token");
+    setToken(null);
+    setClients([]);
+    setProjects([]);
+    setSelectedClient("");
+    setStatus("");
+  }
 
   async function login(event) {
     event.preventDefault();
-    const response = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      setMessage(result.message);
-      return;
+    setStatus("");
+    try {
+      const response = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setStatus(result.message || "Login failed", true);
+        return;
+      }
+      localStorage.setItem("token", result.token);
+      setToken(result.token);
+      setPassword("");
+    } catch (error) {
+      setStatus("Unable to reach the server. Please try again.", true);
     }
-    localStorage.setItem("token", result.token);
-    setToken(result.token);
   }
 
   async function loadClients() {
-    const response = await fetch(`${API_URL}/clients`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const result = await response.json();
-    setClients(result.clients);
+    try {
+      const response = await fetch(`${API_URL}/clients`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        setStatus(result.message || "Failed to load clients", true);
+        return;
+      }
+      // FIX: the API returns { data }, not { clients }.
+      setClients(result.data || []);
+    } catch (error) {
+      setStatus("Unable to reach the server. Please try again.", true);
+    }
   }
 
   async function loadProjects() {
-    const url = selectedClient
-      ? `${API_URL}/projects?clientId=${selectedClient}`
-      : `${API_URL}/projects`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const result = await response.json();
-    setProjects(result.projects);
+    try {
+      const url = selectedClient
+        ? `${API_URL}/projects?clientId=${encodeURIComponent(
+            selectedClient
+          )}`
+        : `${API_URL}/projects`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        setStatus(result.message || "Failed to load projects", true);
+        return;
+      }
+      // FIX: the API returns { data }, not { projects }.
+      setProjects(result.data || []);
+    } catch (error) {
+      setStatus("Unable to reach the server. Please try again.", true);
+    }
   }
 
   async function addClient(event) {
     event.preventDefault();
-    const response = await fetch(`${API_URL}/clients`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: clientName,
-        email: clientEmail,
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      setMessage(result.message);
-      return;
+    setStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clients`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: clientName,
+          email: clientEmail,
+        }),
+      });
+      const result = await response.json();
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      if (!response.ok) {
+        setStatus(result.message || "Failed to add client", true);
+        return;
+      }
+      setStatus("Client added successfully");
+      setClientName("");
+      setClientEmail("");
+      loadClients();
+    } catch (error) {
+      setStatus("Unable to reach the server. Please try again.", true);
     }
-    setMessage("Client added successfully");
-    setClientName("");
-    setClientEmail("");
-    loadClients();
   }
 
   async function deleteClient(id) {
-    const response = await fetch(`${API_URL}/clients/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const result = await response.json();
-    setMessage(result.message);
-    if (response.ok) {
+    setStatus("");
+    try {
+      const response = await fetch(`${API_URL}/clients/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const result = await response.json();
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      if (!response.ok) {
+        setStatus(result.message || "Failed to delete client", true);
+        return;
+      }
+      setStatus(result.message || "Client deleted successfully");
+      // If the deleted client was the active filter, reset the filter.
+      if (String(selectedClient) === String(id)) {
+        setSelectedClient("");
+      }
       loadClients();
+    } catch (error) {
+      setStatus("Unable to reach the server. Please try again.", true);
     }
   }
 
@@ -123,7 +199,7 @@ function App() {
             <button type="submit">Login</button>
           </form>
           {message && (
-            <p className="message">
+            <p className={isError ? "message error" : "message"}>
               {message}
             </p>
           )}
@@ -134,7 +210,12 @@ function App() {
 
   return (
     <div className="container">
-      <h1>VIEK Client Management</h1>
+      <div className="header-row">
+        <h1>VIEK Client Management</h1>
+        <button type="button" className="secondary" onClick={logout}>
+          Log out
+        </button>
+      </div>
       <div className="card">
         <h2>Add Client</h2>
         <form onSubmit={addClient}>
@@ -152,7 +233,7 @@ function App() {
           <button type="submit">Add Client</button>
         </form>
         {message && (
-          <p className="message">
+          <p className={isError ? "message error" : "message"}>
             {message}
           </p>
         )}

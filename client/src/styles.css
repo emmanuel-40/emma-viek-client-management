@@ -23,6 +23,14 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
 form {
   display: flex;
   flex-direction: column;
@@ -41,6 +49,11 @@ button {
   border: none;
   border-radius: 5px;
   cursor: pointer;
+}
+
+button.secondary {
+  background: #6b7280;
+  color: #fff;
 }
 
 ul {
