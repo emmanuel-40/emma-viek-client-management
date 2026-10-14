@@ -270,12 +270,18 @@ function App() {
           ))}
         </select>
         <ul>
-          {projects.map((project) => (
-            <li key={project.id}>
-              <strong>{project.name}</strong>
-              <span>Client ID: {project.clientId}</span>
-            </li>
-          ))}
+          {projects.map((project) => {
+            // Show the client's name instead of an internal id.
+            const owner = clients.find(
+              (client) => String(client.id) === String(project.clientId)
+            );
+            return (
+              <li key={project.id}>
+                <strong>{project.name}</strong>
+                <span>{owner ? owner.name : "Unknown client"}</span>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>
