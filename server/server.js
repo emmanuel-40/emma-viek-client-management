@@ -16,14 +16,18 @@ const users = [
   },
 ];
 
+// Monotonic id source so ids are never reused after a deletion
+// (the original used clients.length + 1, which produced duplicate ids
+// once a client was removed).
+let nextClientId = 1;
 let clients = [
   {
-    id: 1,
+    id: nextClientId++,
     name: "Acme Limited",
     email: "contact@acme.test",
   },
   {
-    id: 2,
+    id: nextClientId++,
     name: "Bright Solutions",
     email: "hello@bright.test",
   },
@@ -91,7 +95,7 @@ app.post("/api/clients", authenticate, (req, res) => {
     });
   }
   const newClient = {
-    id: clients.length + 1,
+    id: nextClientId++,
     name,
     email,
   };
@@ -103,7 +107,14 @@ app.post("/api/clients", authenticate, (req, res) => {
 
 // Delete client
 app.delete("/api/clients/:id", authenticate, (req, res) => {
-  const id = req.params.id;
+  // req.params.id is a string; coerce to a number so the comparison against
+  // the numeric client.id works (previously delete always returned 404).
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({
+      message: "Invalid client id",
+    });
+  }
   const originalLength = clients.length;
   clients = clients.filter((client) => client.id !== id);
   if (clients.length === originalLength) {
@@ -121,10 +132,21 @@ app.get("/api/projects", authenticate, (req, res) => {
   const { clientId } = req.query;
   let result = projects;
   if (clientId) {
-    result = projects.filter((project) => project.clientId === clientId);
+    // req.query values are strings; coerce to a number so the filter matches
+    // the numeric project.clientId (previously filtering returned nothing).
+    const parsed = Number(clientId);
+    if (Number.isNaN(parsed)) {
+      return res.status(400).json({
+        message: "Invalid clientId filter",
+      });
+    }
+    result = projects.filter((project) => project.clientId === parsed);
   }
+  // Standardise the response shape as { data } to match the other list
+  // endpoints (previously this returned { projects }, which the client did
+  // not read correctly).
   res.json({
-    projects: result,
+    data: result,
   });
 });
 
